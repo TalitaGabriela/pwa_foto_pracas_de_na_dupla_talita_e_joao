@@ -6,7 +6,7 @@ import { ExpirationPlugin } from "workbox-expiration";
 
 // configurando o cache
 const pageCache = new CacheFirst({
-  cacheName: "pwa-cam",
+  cacheName: "pwa-fotos-praca-na",
   plugins: [
     new CacheableResponsePlugin({
       statuses: [0, 200],
@@ -43,6 +43,7 @@ offlineFallback({
   pageFallback: "/offline.html", // Página a ser exibida quando offline
 });
 
+//Cache para imagens
 const imageRoute = new Route(
   ({ request }) => request.destination === "image", // Filtra somente requisições de imagens
   new CacheFirst({

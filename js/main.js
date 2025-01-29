@@ -33,14 +33,38 @@ if ('serviceWorker' in navigator) {
       });
   }
   
-  // Função para tirar foto
-  cameraTrigger.onClick = function () {
-    cameraSensor.width = cameraView.videoWidth;
-    cameraSensor.height = cameraView.videoHeight;
-    cameraSensor.getContext('2d').drawImage(cameraView, 0, 0);
-    cameraOutput.src = cameraSensor.toDataURL('image/webp');
+  /// Função para tirar foto e salvar
+cameraTrigger.onclick = function () {
+  cameraSensor.width = cameraView.videoWidth;
+  cameraSensor.height = cameraView.videoHeight;
+  cameraSensor.getContext('2d').drawImage(cameraView, 0, 0);
+  const photoData = cameraSensor.toDataURL('image/webp');
+  
+  savePhoto(photoData).then(() => {
+    cameraOutput.src = photoData;
     cameraOutput.classList.add('taken');
-  };
+    displayGallery();
+  }).catch((error) => {
+    console.error("Erro ao salvar foto", error);
+  });
+};
+
+// Exibir fotos salvas na galeria
+function displayGallery() {
+  getPhotos().then((photos) => {
+    galleryContainer.innerHTML = ''; // Limpar a galeria antes de exibir
+    photos.forEach((photo, index) => {
+      const imgElement = document.createElement('img');
+      imgElement.src = photo.photo;
+      imgElement.alt = `Foto ${index + 1}`;
+      imgElement.classList.add('gallery-item');
+      galleryContainer.appendChild(imgElement);
+    });
+  });
+}
   
   // Inicia a câmera quando a janela carregar
-  window.addEventListener('load', cameraStart, false);  
+  window.addEventListener('load', () => {
+    cameraStart();
+    displayGallery(); // Exibe as fotos salvas ao carregar a página
+});  
