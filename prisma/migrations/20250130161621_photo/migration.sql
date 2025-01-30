@@ -1,0 +1,6 @@
+-- CreateTable
+CREATE TABLE "Photo" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "path" TEXT NOT NULL,
+    "date" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);

@@ -57,3 +57,16 @@ const imageRoute = new Route(
 );
 
 registerRoute(imageRoute);
+
+// Evita cache na API para sempre carregar fotos novas
+registerRoute(
+  ({ request }) => request.url.includes('/api/photos'), // Filtra as requisições para /api/photos
+  new StaleWhileRevalidate({
+    cacheName: "photo-api-cache", // Pode ser nomeado como preferir
+    plugins: [
+      new CacheableResponsePlugin({
+        statuses: [0, 200], // Cache apenas respostas bem-sucedidas
+      }),
+    ],
+  })
+);
