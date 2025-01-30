@@ -1,112 +1,97 @@
-var galleryContainer = document.querySelector('#gallery-container');
+var galleryContainer = document.querySelector("#gallery-container");
 
-// Registrando o Service Worker
-if ('serviceWorker' in navigator) {
-    window.addEventListener('load', async () => {
-      try {
-        let reg;
-        reg = await navigator.serviceWorker.register('/sw.js', { type: 'module' });
-        console.log('✅ Service Worker registrado! 😎', reg);
-      } catch (err) {
-        console.log('😢 O Service Worker falhou: ', err);
-      }
+// Banco de Dados no IndexedDB para armazenar as fotos
+const DB_NAME = "PhotoGalleryDB";
+const DB_VERSION = 1;
+let db;
+
+// Abrir conexão com o IndexedDB
+function openDB() {
+  const request = indexedDB.open(DB_NAME, DB_VERSION);
+
+  request.onupgradeneeded = function (event) {
+    let db = event.target.result;
+    if (!db.objectStoreNames.contains("photos")) {
+      db.createObjectStore("photos", { keyPath: "id", autoIncrement: true });
+    }
+  };
+
+  request.onsuccess = function (event) {
+    db = event.target.result;
+    displayGallery(); // Exibir as fotos salvas ao abrir o app
+  };
+
+  request.onerror = function (event) {
+    console.error("❌ Erro ao abrir IndexedDB:", event.target.errorCode);
+  };
+}
+
+// Salvar imagem no IndexedDB
+function savePhotoToDB(photoData) {
+  const transaction = db.transaction(["photos"], "readwrite");
+  const store = transaction.objectStore("photos");
+  store.add({ photo: photoData });
+
+  transaction.oncomplete = function () {
+    console.log("✅ Foto salva no banco de dados!");
+    displayGallery(); // Atualizar a galeria após salvar
+  };
+
+  transaction.onerror = function (event) {
+    console.error("❌ Erro ao salvar foto:", event.target.error);
+  };
+}
+
+// Buscar fotos do IndexedDB e exibir na galeria
+function displayGallery() {
+  galleryContainer.innerHTML = ""; // Limpa antes de exibir
+
+  const transaction = db.transaction(["photos"], "readonly");
+  const store = transaction.objectStore("photos");
+  const request = store.getAll();
+
+  request.onsuccess = function () {
+    const photos = request.result;
+    photos.forEach((photo) => {
+      const card = document.createElement("div");
+      card.classList.add("gallery-card");
+
+      const imgElement = document.createElement("img");
+      imgElement.src = photo.photo;
+      imgElement.alt = "Foto salva";
+
+      card.appendChild(imgElement);
+      galleryContainer.appendChild(card);
     });
-  }
-  
-  // Configurando as constraints de vídeo stream
-  var constraints = { video: { facingMode: 'user' }, audio: false };
-  
-  // Capturando os elementos na tela
-  var cameraView = document.querySelector('#camera--view');
-  var cameraOutput = document.querySelector('#camera--output');
-  var cameraSensor = document.querySelector('#camera--sensor');
-  var cameraTrigger = document.querySelector('#camera--trigger');
-  
-  // Estabelecendo o acesso à câmera e inicializando a visualização
-  function cameraStart() {
-    navigator.mediaDevices
-      .getUserMedia(constraints)
-      .then(function (stream) {
-        const track = stream.getTracks()[0];
-        cameraView.srcObject = stream;
-      })
-      .catch(function (error) {
-        console.error('Ocorreu um Erro: ', error);
-      });
-  }
-
-  // ✅ Função para buscar fotos do backend
-async function getPhotos() {
-  try {
-      const response = await fetch('http://localhost:3000/api/photos'); // Endpoint para buscar as fotos
-      if (!response.ok) throw new Error('Erro ao buscar fotos');
-      return await response.json(); // Retorna a lista de fotos como JSON
-  } catch (error) {
-      console.error('❌ Erro ao buscar fotos:', error);
-      return [];
-  }
+  };
 }
 
-  // Converter Base64 para Blob (necessário para envio ao backend)
-function dataURLtoBlob(dataURL) {
-  const byteString = atob(dataURL.split(',')[1]);
-  const mimeString = dataURL.split(',')[0].split(':')[1].split(';')[0];
-  const arrayBuffer = new ArrayBuffer(byteString.length);
-  const uint8Array = new Uint8Array(arrayBuffer);
+// Captura de Foto
+var constraints = { video: { facingMode: "user" }, audio: false };
+var cameraView = document.querySelector("#camera--view");
+var cameraSensor = document.querySelector("#camera--sensor");
+var cameraTrigger = document.querySelector("#camera--trigger");
 
-  for (let i = 0; i < byteString.length; i++) {
-      uint8Array[i] = byteString.charCodeAt(i);
-  }
-
-  return new Blob([arrayBuffer], { type: mimeString });
+function cameraStart() {
+  navigator.mediaDevices
+    .getUserMedia(constraints)
+    .then((stream) => {
+      cameraView.srcObject = stream;
+    })
+    .catch((error) => console.error("Ocorreu um erro: ", error));
 }
-  
-cameraTrigger.onclick = async function () {
+
+cameraTrigger.onclick = function () {
   cameraSensor.width = cameraView.videoWidth;
   cameraSensor.height = cameraView.videoHeight;
-  cameraSensor.getContext('2d').drawImage(cameraView, 0, 0);
-  const photoData = cameraSensor.toDataURL('image/webp'); // Converte para Base64
+  cameraSensor.getContext("2d").drawImage(cameraView, 0, 0);
 
-  try {
-      const formData = new FormData();
-      formData.append('image', dataURLtoBlob(photoData), 'photo.webp');
-
-      const response = await fetch('/api/photos', { // ALTERADO AQUI
-        method: 'POST',
-        body: formData,
-    });
-    
-
-      if (!response.ok) throw new Error('Erro ao salvar imagem');
-
-      const result = await response.json();
-      console.log('✅ Foto salva com sucesso:', result);
-
-      cameraOutput.src = photoData;
-      cameraOutput.classList.add('taken');
-      displayGallery();
-  } catch (error) {
-      console.error('❌ Erro ao salvar foto:', error);
-  }
+  const photoData = cameraSensor.toDataURL("image/webp"); // Converte para Base64
+  savePhotoToDB(photoData); // Salva no IndexedDB
 };
 
-// Exibir fotos salvas na galeria
-function displayGallery() {
-  getPhotos().then((photos) => {
-    galleryContainer.innerHTML = ''; // Limpar antes de exibir
-    photos.forEach((photo) => {
-      const imgElement = document.createElement('img');
-      imgElement.src = photo.photo;
-      imgElement.alt = 'Foto salva';
-      imgElement.classList.add('gallery-item');
-      galleryContainer.appendChild(imgElement);
-    });
-  });
-}
-
-  
-  // Inicia a câmera quando a janela carregar
-  window.addEventListener('load', () => {
-    cameraStart();
-    displayGallery(); // Exibe as fotos salvas ao carregar a página
-});  
+// Iniciar câmera e carregar galeria ao abrir
+window.addEventListener("load", () => {
+  openDB();
+  cameraStart();
+});

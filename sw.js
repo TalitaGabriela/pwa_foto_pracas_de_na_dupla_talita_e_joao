@@ -4,7 +4,7 @@ import { registerRoute, Route } from "workbox-routing";
 import { CacheableResponsePlugin } from "workbox-cacheable-response";
 import { ExpirationPlugin } from "workbox-expiration";
 
-// configurando o cache
+// Configuração do Cache para Páginas
 const pageCache = new CacheFirst({
   cacheName: "pwa-fotos-praca-na",
   plugins: [
@@ -12,38 +12,39 @@ const pageCache = new CacheFirst({
       statuses: [0, 200],
     }),
     new ExpirationPlugin({
-      maxAgeSeconds: 30 * 24 * 60 * 60,
+      maxAgeSeconds: 30 * 24 * 60 * 60, // 30 dias
     }),
   ],
 });
 
-//indicando o cache de página
+// Indicando o Cache para Página Principal
 warmStrategyCache({
   urls: ["/index.html", "/"],
   strategy: pageCache,
 });
-//registrando a rota
+
+// Registrando a rota do cache
 registerRoute(({ request }) => request.mode === "navigate", pageCache);
 
-// Configurando o cache para assets (style, script, worker)
+// Cache para assets (style, script, worker)
 registerRoute(
-  ({request}) => ["style", "script", "worker"].includes(request.destination),
+  ({ request }) => ["style", "script", "worker"].includes(request.destination),
   new StaleWhileRevalidate({
     cacheName: "asset-cache",
     plugins: [
       new CacheableResponsePlugin({
-        statuses: [0, 200], // Apenas respostas com status 0 e 200 serão cacheadas
+        statuses: [0, 200],
       }),
     ],
   })
 );
 
-// Configurando fallback offline
+// Configuração de fallback offline
 offlineFallback({
-  pageFallback: "/offline.html", // Página a ser exibida quando offline
+  pageFallback: "/offline.html", // Página exibida quando offline
 });
 
-//Cache para imagens
+// Cache para imagens (agora considerando imagens locais e cacheadas)
 const imageRoute = new Route(
   ({ request }) => request.destination === "image", // Filtra somente requisições de imagens
   new CacheFirst({
@@ -58,15 +59,23 @@ const imageRoute = new Route(
 
 registerRoute(imageRoute);
 
-// Evita cache na API para sempre carregar fotos novas
-registerRoute(
-  ({ request }) => request.url.includes('/api/photos'), // Filtra as requisições para /api/photos
-  new StaleWhileRevalidate({
-    cacheName: "photo-api-cache", // Pode ser nomeado como preferir
-    plugins: [
-      new CacheableResponsePlugin({
-        statuses: [0, 200], // Cache apenas respostas bem-sucedidas
-      }),
-    ],
-  })
-);
+
+// Adicionando Cache para as imagens do IndexedDB armazenadas localmente
+self.addEventListener("fetch", (event) => {
+  if (event.request.url.endsWith(".webp")) { // Verificando se é uma imagem
+    event.respondWith(
+      caches.match(event.request).then((cachedResponse) => {
+        if (cachedResponse) {
+          return cachedResponse; // Se imagem estiver no cache, retorna
+        }
+        return fetch(event.request).then((response) => {
+          const clonedResponse = response.clone();
+          caches.open("images").then((cache) => {
+            cache.put(event.request, clonedResponse); // Coloca no cache
+          });
+          return response;
+        });
+      })
+    );
+  }
+});
